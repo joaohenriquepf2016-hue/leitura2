@@ -1,0 +1,1171 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestão Escolar - Acompanhamento de Leitura</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
+                    colors: {
+                        primary: '#0a3291',
+                        'primary-light': '#d9e7ff',
+                        success: '#00796b',
+                        danger: '#d32f2f',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        .modal-wrap { animation: modalIn .18s ease; }
+        @keyframes modalIn { from { opacity:0; transform:scale(.96) translateY(-6px); } to { opacity:1; transform:scale(1) translateY(0); } }
+        .toast { animation: slideIn .3s ease, fadeOut .4s ease 2.3s forwards; }
+        @keyframes slideIn { from { transform:translateX(120%); opacity:0; } to { transform:translateX(0); opacity:1; } }
+        @keyframes fadeOut { from { opacity:1; } to { opacity:0; pointer-events:none; } }
+        .bar-fill { transition: width .6s ease; }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 font-sans h-screen flex overflow-hidden">
+
+<!-- Mobile overlay -->
+<div id="mob-overlay" class="fixed inset-0 bg-black/40 z-30 hidden lg:hidden" onclick="toggleSidebar()"></div>
+
+<!-- ══════════ SIDEBAR ══════════ -->
+<aside id="sidebar" class="w-52 bg-white border-r border-gray-200 flex flex-col flex-shrink-0 fixed lg:static inset-y-0 left-0 z-40 -translate-x-full lg:translate-x-0 transition-transform duration-250">
+    <div class="p-4 flex items-center gap-3 border-b border-gray-200">
+        <div class="w-9 h-9 bg-primary rounded-lg flex items-center justify-center text-white flex-shrink-0">
+            <i class="ph-fill ph-graduation-cap text-xl"></i>
+        </div>
+        <div class="leading-tight">
+            <div class="font-bold text-primary text-base">Gestão</div>
+            <div class="font-bold text-primary text-base">Escolar</div>
+        </div>
+    </div>
+
+    <nav class="flex-1 overflow-y-auto py-4 px-2 space-y-0.5">
+        <p class="px-3 mb-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Turmas</p>
+        <button onclick="render('4a')" id="nav-4a" class="sidebar-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition-colors">
+            <i class="ph ph-graduation-cap text-base"></i>4º Ano A
+        </button>
+        <button onclick="render('4b')" id="nav-4b" class="sidebar-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition-colors">
+            <i class="ph ph-graduation-cap text-base"></i>4º Ano B
+        </button>
+        <button onclick="render('5a')" id="nav-5a" class="sidebar-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition-colors">
+            <i class="ph ph-graduation-cap text-base"></i>5º Ano A
+        </button>
+        <button onclick="render('5b')" id="nav-5b" class="sidebar-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition-colors">
+            <i class="ph ph-graduation-cap text-base"></i>5º Ano B
+        </button>
+
+        <p class="px-3 mt-6 mb-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Ferramentas</p>
+        <button onclick="openGlobalHistory()" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition-colors">
+            <i class="ph ph-clock-counter-clockwise text-base"></i>Histórico
+        </button>
+        <button onclick="openConfigModal()" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition-colors">
+            <i class="ph ph-gear text-base"></i>Configurações
+        </button>
+    </nav>
+
+    <div class="p-3 border-t border-gray-200">
+        <button onclick="openAddModal()" class="w-full bg-primary hover:bg-blue-900 text-white font-semibold py-2.5 px-3 rounded-lg flex items-center justify-center gap-2 transition-colors shadow-sm text-sm">
+            <i class="ph-bold ph-plus"></i>Novo Aluno
+        </button>
+    </div>
+</aside>
+
+<!-- ══════════ MAIN ══════════ -->
+<main class="flex-1 flex flex-col min-w-0 overflow-hidden">
+
+    <!-- Header -->
+    <header class="h-14 bg-white border-b border-gray-200 flex items-center justify-between px-5 flex-shrink-0">
+        <div class="flex items-center gap-3">
+            <button onclick="toggleSidebar()" class="lg:hidden p-1.5 text-gray-500 hover:text-primary rounded-md">
+                <i class="ph ph-list text-lg"></i>
+            </button>
+            <div>
+                <h1 class="text-base font-bold text-primary leading-tight" id="school-name">EMEF ANTÔNIO BARROSO BRAGA</h1>
+                <div class="mt-0.5">
+                    <span class="text-xs font-semibold text-primary border-b-2 border-primary pb-0.5">Leitura</span>
+                </div>
+            </div>
+        </div>
+        <div class="flex items-center gap-2">
+            <div class="relative hidden sm:block">
+                <i class="ph ph-magnifying-glass absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
+                <input id="search-input" type="text" placeholder="Buscar aluno..." oninput="doSearch(this.value)"
+                    class="pl-8 pr-3 py-1.5 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary w-44 lg:w-56 transition-all">
+            </div>
+            <button class="p-1.5 text-gray-500 hover:text-primary hover:bg-gray-100 rounded-full transition-colors">
+                <i class="ph ph-bell text-lg"></i>
+            </button>
+            <button onclick="openConfigModal()" class="p-1.5 text-gray-500 hover:text-primary hover:bg-gray-100 rounded-full transition-colors">
+                <i class="ph ph-gear text-lg"></i>
+            </button>
+            <span class="hidden sm:inline-flex items-center gap-1 text-xs font-medium text-gray-500 border border-gray-200 rounded-full px-2.5 py-1">
+                <i class="ph ph-translate text-sm text-primary"></i>LÍNGUA PORTUGUESA
+            </span>
+            <div id="fb-status" title="Sem conexão Firebase" class="hidden sm:inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border border-gray-200 text-gray-400 transition-all duration-300">
+                <span id="fb-dot" class="w-2 h-2 rounded-full bg-gray-300 flex-shrink-0"></span>
+                <span id="fb-label">Offline</span>
+            </div>
+            <div class="w-8 h-8 rounded-full bg-primary-light flex items-center justify-center text-primary font-bold text-xs cursor-pointer hover:bg-blue-200 transition-colors">U</div>
+        </div>
+    </header>
+
+    <!-- MAIN VIEW -->
+    <div id="main-view" class="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-5">
+
+        <!-- Breadcrumb + title -->
+        <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+            <div>
+                <div class="text-xs text-gray-500 mb-1">Turmas / <span id="crumb" class="font-medium text-gray-700">4º Ano A</span></div>
+                <h2 class="text-2xl font-bold text-primary">Acompanhamento de Leitura</h2>
+                <p class="text-xs text-gray-500 mt-0.5">Monitoramento individual de fluência e proficiência leitora.</p>
+            </div>
+            <div class="flex items-center gap-2">
+                <button onclick="exportReport()" class="px-3 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors flex items-center gap-1.5 shadow-sm">
+                    <i class="ph ph-download-simple text-base"></i>Exportar<br>Relatório
+                </button>
+                <button onclick="openNextAssessment()" class="px-3 py-2 bg-primary text-white rounded-lg text-xs font-medium hover:bg-blue-900 transition-colors flex items-center gap-1.5 shadow-sm whitespace-nowrap">
+                    <i class="ph ph-calendar-check text-base"></i>Próxima Avaliação
+                </button>
+            </div>
+        </div>
+
+        <!-- KPI cards -->
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div class="bg-white rounded-lg border border-gray-200 p-4 shadow-sm">
+                <div class="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Total de Alunos</div>
+                <div class="text-3xl font-bold text-primary mt-2" id="kpi-total">–</div>
+            </div>
+            <div class="bg-white rounded-lg border border-gray-200 p-4 shadow-sm">
+                <div class="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Com Fluência</div>
+                <div class="text-3xl font-bold text-success mt-2">
+                    <span id="kpi-flu">–</span><span id="kpi-flu-pct" class="text-sm font-normal text-gray-500 ml-1"></span>
+                </div>
+            </div>
+            <div class="bg-white rounded-lg border border-gray-200 p-4 shadow-sm">
+                <div class="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Não Leitores</div>
+                <div class="text-3xl font-bold text-danger mt-2">
+                    <span id="kpi-nao">–</span><span id="kpi-nao-pct" class="text-sm font-normal text-gray-500 ml-1"></span>
+                </div>
+            </div>
+            <div class="bg-white rounded-lg border border-gray-200 p-4 shadow-sm">
+                <div class="text-[10px] font-semibold text-gray-400 uppercase tracking-wide" id="kpi-meta-lbl">Meta Bimestre</div>
+                <div class="text-3xl font-bold mt-2" id="kpi-meta">–</div>
+            </div>
+        </div>
+
+        <!-- ── MONITORAMENTO POR NÍVEL ── -->
+        <div class="bg-white rounded-lg border border-gray-200 shadow-sm p-5">
+            <h3 class="text-base font-bold text-primary mb-4">Distribuição por Nível de Leitura</h3>
+            <div id="level-bars" class="space-y-3"></div>
+        </div>
+
+        <!-- Student table -->
+        <div class="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+            <div class="px-5 py-3.5 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <h3 class="text-base font-bold text-primary">Lista de Alunos</h3>
+                <div class="flex items-center gap-2 flex-wrap">
+                    <div class="relative">
+                        <select id="filter-sel" onchange="doFilter()" class="appearance-none pl-7 pr-6 py-1.5 border border-gray-300 bg-white rounded-md text-xs font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary cursor-pointer">
+                            <option value="">Filtrar por Nível</option>
+                            <option>LÊ TEXTOS COM FLUÊNCIA</option>
+                            <option>LÊ TEXTOS SEM FLUÊNCIA</option>
+                            <option>LÊ FRASES</option>
+                            <option>LÊ PALAVRAS</option>
+                            <option>RECONHECE TODAS AS LETRAS DO ALFABETO</option>
+                            <option>NÃO LEITOR</option>
+                        </select>
+                        <i class="ph ph-funnel absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-xs pointer-events-none"></i>
+                        <i class="ph ph-caret-down absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs pointer-events-none"></i>
+                    </div>
+                    <button onclick="toggleSort()" class="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 bg-white rounded-md text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+                        <i class="ph ph-arrows-down-up text-gray-400 text-xs"></i>
+                        Ordenar por: <span id="sort-lbl">Nome (A-Z)</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-left">
+                    <thead class="bg-gray-50 border-b border-gray-200">
+                        <tr>
+                            <th class="px-5 py-3 text-[10px] font-semibold text-gray-500 uppercase tracking-wider w-10">Nº</th>
+                            <th class="px-5 py-3 text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Aluno</th>
+                            <th class="px-5 py-3 text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Nível de Leitura Atual</th>
+                            <th class="px-5 py-3 text-[10px] font-semibold text-gray-500 uppercase tracking-wider hidden md:table-cell">Última Alteração</th>
+                            <th class="px-5 py-3 text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody" class="divide-y divide-gray-100"></tbody>
+                </table>
+            </div>
+
+            <div class="px-5 py-3 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
+                <span id="pag-info" class="text-xs text-gray-500"></span>
+                <div id="pag-btns" class="flex items-center gap-1"></div>
+            </div>
+        </div>
+
+        <footer class="text-center text-[10px] text-gray-400 pb-3">
+            © 2024 EMEF ANTÔNIO BARROSO BRAGA — Sistema de Monitoramento de Aprendizagem
+        </footer>
+    </div>
+
+    <!-- HISTORY VIEW -->
+    <div id="hist-view" class="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-5 hidden">
+        <div class="flex items-center gap-3">
+            <button onclick="closeGlobalHistory()" class="p-2 text-gray-500 hover:text-primary hover:bg-gray-100 rounded-full">
+                <i class="ph ph-arrow-left text-lg"></i>
+            </button>
+            <div>
+                <div class="text-xs text-gray-500 mb-0.5">Ferramentas / Histórico</div>
+                <h2 class="text-2xl font-bold text-primary">Histórico de Alterações</h2>
+            </div>
+        </div>
+        <div id="hist-list" class="bg-white rounded-lg border border-gray-200 shadow-sm divide-y divide-gray-100 min-h-32"></div>
+    </div>
+</main>
+
+<!-- ══════════ MODALS ══════════ -->
+
+<!-- Add/Edit Student -->
+<div id="modal-student" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 backdrop-blur-sm p-4">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-md modal-wrap">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+            <h3 id="modal-title" class="text-lg font-bold text-primary">Adicionar Aluno</h3>
+            <button onclick="closeStudentModal()" class="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100"><i class="ph ph-x text-lg"></i></button>
+        </div>
+        <form id="student-form" class="p-6 space-y-4">
+            <input type="hidden" id="s-idx" value="-1">
+            <div>
+                <label class="block text-xs font-semibold text-gray-600 mb-1">Nome do Aluno</label>
+                <input id="s-name" type="text" required placeholder="Ex: JOÃO DA SILVA"
+                    class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm uppercase focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none">
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-gray-600 mb-1">Nível de Leitura</label>
+                <select id="s-level" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none">
+                    <option>LÊ TEXTOS COM FLUÊNCIA</option>
+                    <option>LÊ TEXTOS SEM FLUÊNCIA</option>
+                    <option>LÊ FRASES</option>
+                    <option>LÊ PALAVRAS</option>
+                    <option>RECONHECE TODAS AS LETRAS DO ALFABETO</option>
+                    <option>NÃO LEITOR</option>
+                </select>
+            </div>
+            <div class="flex justify-end gap-2 pt-3 border-t border-gray-100">
+                <button type="button" onclick="closeStudentModal()" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm font-medium">Cancelar</button>
+                <button type="submit" class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-blue-900 text-sm font-medium shadow-sm">Salvar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Student History Modal -->
+<div id="modal-shist" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 backdrop-blur-sm p-4">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg modal-wrap">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+            <div>
+                <h3 class="text-lg font-bold text-primary">Histórico do Aluno</h3>
+                <p id="shist-name" class="text-xs text-gray-500 mt-0.5"></p>
+            </div>
+            <button onclick="closeStudentHistory()" class="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100"><i class="ph ph-x text-lg"></i></button>
+        </div>
+        <div id="shist-body" class="p-6 space-y-3 max-h-80 overflow-y-auto custom-scrollbar"></div>
+        <div class="px-6 py-3 border-t border-gray-100 flex justify-between items-center">
+            <button id="shist-edit-btn" class="text-xs text-primary font-medium flex items-center gap-1 hover:underline">
+                <i class="ph ph-pencil-simple"></i>Editar aluno
+            </button>
+            <button id="shist-del-btn" class="text-xs text-danger font-medium flex items-center gap-1 hover:underline">
+                <i class="ph ph-trash"></i>Excluir aluno
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirm -->
+<div id="modal-del" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 backdrop-blur-sm p-4">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm modal-wrap p-6 text-center">
+        <div class="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3">
+            <i class="ph ph-trash text-danger text-2xl"></i>
+        </div>
+        <h3 class="text-lg font-bold text-gray-900 mb-1">Excluir Aluno</h3>
+        <p class="text-sm text-gray-500 mb-5">Tem certeza que deseja excluir <strong id="del-name"></strong>?</p>
+        <div class="flex gap-2">
+            <button onclick="closeDelModal()" class="flex-1 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm font-medium">Cancelar</button>
+            <button onclick="confirmDel()" class="flex-1 py-2 bg-danger text-white rounded-lg hover:bg-red-700 text-sm font-medium">Excluir</button>
+        </div>
+    </div>
+</div>
+
+<!-- Next Assessment -->
+<div id="modal-assess" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 backdrop-blur-sm p-4">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-md modal-wrap">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+            <h3 class="text-lg font-bold text-primary">Próxima Avaliação</h3>
+            <button onclick="hideModal('modal-assess')" class="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100"><i class="ph ph-x text-lg"></i></button>
+        </div>
+        <form onsubmit="submitAssessment(event)" class="p-6 space-y-4">
+            <div>
+                <label class="block text-xs font-semibold text-gray-600 mb-1">Turma</label>
+                <input id="assess-class" type="text" readonly class="w-full border border-gray-200 bg-gray-50 rounded-lg px-3 py-2 text-sm text-gray-500">
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-gray-600 mb-1">Data da Avaliação</label>
+                <input id="assess-date" type="date" required class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none">
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-gray-600 mb-1">Observações</label>
+                <textarea id="assess-obs" rows="3" placeholder="Opcional..." class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none resize-none"></textarea>
+            </div>
+            <div class="flex justify-end gap-2 pt-3 border-t border-gray-100">
+                <button type="button" onclick="hideModal('modal-assess')" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm font-medium">Cancelar</button>
+                <button type="submit" class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-blue-900 text-sm font-medium shadow-sm">Agendar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Config -->
+<div id="modal-config" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 backdrop-blur-sm p-4">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-md modal-wrap">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+            <h3 class="text-lg font-bold text-primary">Configurações</h3>
+            <button onclick="hideModal('modal-config')" class="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100"><i class="ph ph-x text-lg"></i></button>
+        </div>
+        <div class="p-6 space-y-4">
+            <div>
+                <label class="block text-xs font-semibold text-gray-600 mb-1">Nome da Escola</label>
+                <input id="cfg-school" type="text" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none">
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 mb-1">Meta 4º A</label>
+                    <input id="cfg-4a" type="text" placeholder="Ex: 75%" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 mb-1">Meta 4º B</label>
+                    <input id="cfg-4b" type="text" placeholder="Ex: +12%" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 mb-1">Meta 5º A</label>
+                    <input id="cfg-5a" type="text" placeholder="Ex: +15%" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 mb-1">Meta 5º B</label>
+                    <input id="cfg-5b" type="text" placeholder="Ex: +10%" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none">
+                </div>
+            </div>
+            <button onclick="resetData()" class="w-full py-2 text-danger border border-danger/30 bg-red-50 hover:bg-red-100 rounded-lg text-sm font-medium flex items-center justify-center gap-1.5 transition-colors">
+                <i class="ph ph-arrow-counter-clockwise"></i>Restaurar Dados Padrão
+            </button>
+            <div class="flex justify-end gap-2 pt-2 border-t border-gray-100">
+                <button onclick="hideModal('modal-config')" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm font-medium">Cancelar</button>
+                <button onclick="saveConfig()" class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-blue-900 text-sm font-medium shadow-sm">Salvar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast -->
+<div id="toasts" class="fixed bottom-5 right-5 z-[100] flex flex-col gap-2 items-end"></div>
+
+<!-- Saving indicator -->
+<div id="saving-badge" class="fixed bottom-5 left-5 z-[100] hidden items-center gap-2 bg-white border border-gray-200 shadow-md rounded-lg px-3 py-2 text-xs text-gray-600">
+    <i class="ph ph-circle-notch animate-spin text-primary text-base"></i>Salvando...
+</div>
+
+<script>
+// ══════════════════════════════
+//  LEVELS CONFIG
+// ══════════════════════════════
+const LEVELS = [
+    { key:'LÊ TEXTOS COM FLUÊNCIA',                label:'Lê Textos com Fluência',         bar:'bg-emerald-500', badge:'bg-emerald-100 text-emerald-800' },
+    { key:'LÊ TEXTOS SEM FLUÊNCIA',                label:'Lê Textos sem Fluência',         bar:'bg-blue-500',    badge:'bg-blue-100 text-blue-800' },
+    { key:'LÊ FRASES',                             label:'Lê Frases',                      bar:'bg-violet-500',  badge:'bg-violet-100 text-violet-800' },
+    { key:'LÊ PALAVRAS',                           label:'Lê Palavras',                    bar:'bg-amber-500',   badge:'bg-amber-100 text-amber-800' },
+    { key:'RECONHECE TODAS AS LETRAS DO ALFABETO', label:'Reconhece Letras do Alfabeto',   bar:'bg-orange-400',  badge:'bg-orange-100 text-orange-800' },
+    { key:'NÃO LEITOR',                            label:'Não Leitor',                     bar:'bg-red-500',     badge:'bg-red-100 text-red-800' },
+];
+
+const COLORS = [
+    'bg-blue-100 text-blue-800','bg-purple-100 text-purple-800',
+    'bg-teal-100 text-teal-800','bg-pink-100 text-pink-800',
+    'bg-indigo-100 text-indigo-800','bg-emerald-100 text-emerald-800',
+    'bg-sky-100 text-sky-800','bg-orange-100 text-orange-800',
+    'bg-rose-100 text-rose-800','bg-yellow-100 text-yellow-800',
+];
+
+const PER_PAG = 5;
+
+// ══════════════════════════════
+//  DEFAULT DATA
+// ══════════════════════════════
+function mkStudents(list) {
+    return list.map((s,i) => ({
+        id: String(i+1).padStart(2,'0'),
+        initials: ini(s.name),
+        name: s.name,
+        level: s.level,
+        date: s.date,
+        color: COLORS[i % COLORS.length]
+    }));
+}
+
+const DEF_APP = {
+    schoolName: 'EMEF ANTÔNIO BARROSO BRAGA',
+    '4a': {
+        name: '4º Ano A',
+        meta: { value:'75%', label:'Meta Bimestre', trend:false },
+        students: mkStudents([
+            { name:'ADRIANA COSTA FERREIRA',   level:'LÊ TEXTOS COM FLUÊNCIA',  date:'15/05/2024' },
+            { name:'ALEX RODRIGUES LIMA',       level:'LÊ TEXTOS COM FLUÊNCIA',  date:'15/05/2024' },
+            { name:'ANA BEATRIZ SANTOS',        level:'LÊ TEXTOS COM FLUÊNCIA',  date:'15/05/2024' },
+            { name:'BEATRIZ ALMEIDA SOUZA',     level:'LÊ TEXTOS COM FLUÊNCIA',  date:'15/05/2024' },
+            { name:'BRENO CARVALHO NUNES',      level:'LÊ TEXTOS SEM FLUÊNCIA',  date:'10/04/2024' },
+            { name:'BRUNO SILVA SANTOS',        level:'LÊ FRASES',               date:'10/04/2024' },
+            { name:'CAIO FERREIRA LIMA',        level:'LÊ TEXTOS COM FLUÊNCIA',  date:'15/05/2024' },
+            { name:'CAROLINA MENDES FARIA',     level:'LÊ TEXTOS COM FLUÊNCIA',  date:'15/05/2024' },
+            { name:'DANIELA MENDES ROCHA',      level:'LÊ PALAVRAS',             date:'02/06/2024' },
+            { name:'EDUARDO LIMA SOUZA',        level:'LÊ TEXTOS COM FLUÊNCIA',  date:'15/05/2024' },
+            { name:'ENZO JARDIM OLIVEIRA',      level:'NÃO LEITOR',              date:'15/02/2024' },
+            { name:'FERNANDA PAIVA LUCCA',      level:'LÊ TEXTOS SEM FLUÊNCIA',  date:'28/05/2024' },
+            { name:'GABRIEL SANTOS COSTA',      level:'LÊ TEXTOS COM FLUÊNCIA',  date:'03/06/2024' },
+            { name:'GIOVANA RIBEIRO SILVA',     level:'LÊ TEXTOS SEM FLUÊNCIA',  date:'04/06/2024' },
+            { name:'GUILHERME PEREIRA LIMA',    level:'NÃO LEITOR',              date:'15/02/2024' },
+            { name:'HELENA SOUZA PINTO',        level:'LÊ TEXTOS COM FLUÊNCIA',  date:'01/06/2024' },
+            { name:'IGOR ALVES MEIRELES',       level:'RECONHECE TODAS AS LETRAS DO ALFABETO', date:'20/05/2024' },
+            { name:'ISABELA FERREIRA GOMES',    level:'LÊ TEXTOS COM FLUÊNCIA',  date:'15/05/2024' },
+            { name:'JOÃO PEDRO SANTOS',         level:'LÊ TEXTOS SEM FLUÊNCIA',  date:'28/05/2024' },
+            { name:'JULIA CARDOSO BEZERRA',     level:'LÊ FRASES',               date:'12/05/2024' },
+            { name:'KAIQUE RAMOS FERREIRA',     level:'LÊ PALAVRAS',             date:'10/05/2024' },
+            { name:'LARISSA NASCIMENTO SILVA',  level:'LÊ TEXTOS COM FLUÊNCIA',  date:'05/06/2024' },
+            { name:'LETÍCIA COSTA ALMEIDA',     level:'LÊ TEXTOS SEM FLUÊNCIA',  date:'04/06/2024' },
+            { name:'LUCAS OLIVEIRA MARTINS',    level:'NÃO LEITOR',              date:'15/02/2024' },
+            { name:'MARCOS TEIXEIRA GOMES',     level:'LÊ TEXTOS SEM FLUÊNCIA',  date:'04/06/2024' },
+            { name:'MARIANA PEREIRA BRITO',     level:'LÊ TEXTOS COM FLUÊNCIA',  date:'15/05/2024' },
+            { name:'MATEUS RODRIGUES SILVA',    level:'LÊ PALAVRAS',             date:'10/05/2024' },
+            { name:'NICOLE FERREIRA LIMA',      level:'NÃO LEITOR',              date:'15/02/2024' },
+            { name:'PEDRO HENRIQUE ALVES',      level:'LÊ TEXTOS COM FLUÊNCIA',  date:'15/05/2024' },
+            { name:'RAFAEL SANTOS SOUZA',       level:'LÊ FRASES',               date:'12/05/2024' },
+            { name:'SARAH MELO CARVALHO',       level:'NÃO LEITOR',              date:'15/02/2024' },
+            { name:'THIAGO DIAS ROCHA',         level:'RECONHECE TODAS AS LETRAS DO ALFABETO', date:'15/05/2024' },
+        ])
+    },
+    '4b': {
+        name: '4º Ano B',
+        meta: { value:'+12%', label:'Evolução Mês', trend:true },
+        students: mkStudents([
+            { name:'ANA ALICE SILVA',           level:'LÊ TEXTOS COM FLUÊNCIA',  date:'15/05/2024' },
+            { name:'ANDERSON RAMOS LIMA',       level:'LÊ TEXTOS COM FLUÊNCIA',  date:'15/05/2024' },
+            { name:'BEATRIZ LIMA SANTOS',       level:'LÊ TEXTOS SEM FLUÊNCIA',  date:'12/05/2024' },
+            { name:'BERNARDO ALVES COSTA',      level:'LÊ FRASES',               date:'10/05/2024' },
+            { name:'BIANCA FERREIRA MENDES',    level:'LÊ PALAVRAS',             date:'08/05/2024' },
+            { name:'BRUNO SANTOS',              level:'LÊ PALAVRAS',             date:'10/05/2024' },
+            { name:'CARLA PEREIRA',             level:'NÃO LEITOR',              date:'12/05/2024' },
+            { name:'CARLOS EDUARDO SILVA',      level:'LÊ FRASES',               date:'09/05/2024' },
+            { name:'DANIEL MENDES',             level:'LÊ TEXTOS SEM FLUÊNCIA',  date:'20/05/2024' },
+            { name:'DIEGO PEREIRA SANTOS',      level:'LÊ TEXTOS SEM FLUÊNCIA',  date:'18/05/2024' },
+            { name:'ELISA BARBOSA ROCHA',       level:'LÊ TEXTOS COM FLUÊNCIA',  date:'15/05/2024' },
+            { name:'ESTER LOPES ALMEIDA',       level:'LÊ TEXTOS COM FLUÊNCIA',  date:'22/05/2024' },
+            { name:'FELIPE MORAES COSTA',       level:'LÊ FRASES',               date:'18/05/2024' },
+            { name:'FERNANDA OLIVEIRA LIMA',    level:'RECONHECE TODAS AS LETRAS DO ALFABETO', date:'14/05/2024' },
+            { name:'GABRIEL ANDRADE SILVA',     level:'LÊ TEXTOS COM FLUÊNCIA',  date:'15/05/2024' },
+            { name:'GIOVANNA LIMA FERREIRA',    level:'NÃO LEITOR',              date:'06/05/2024' },
+            { name:'HENRIQUE SOUZA NEVES',      level:'LÊ PALAVRAS',             date:'10/05/2024' },
+            { name:'ISABELLE COSTA MARTINS',    level:'LÊ TEXTOS SEM FLUÊNCIA',  date:'20/05/2024' },
+            { name:'JOÃO VICTOR MENDES',        level:'LÊ TEXTOS COM FLUÊNCIA',  date:'15/05/2024' },
+            { name:'JÚLIA NASCIMENTO GOMES',    level:'LÊ FRASES',               date:'11/05/2024' },
+            { name:'KARINA ALVES PINTO',        level:'NÃO LEITOR',              date:'04/05/2024' },
+            { name:'LUCAS BARBOSA FARIA',       level:'LÊ TEXTOS SEM FLUÊNCIA',  date:'19/05/2024' },
+            { name:'LUIZA RODRIGUES SILVA',     level:'LÊ TEXTOS COM FLUÊNCIA',  date:'15/05/2024' },
+            { name:'MARCOS VIEIRA SANTOS',      level:'RECONHECE TODAS AS LETRAS DO ALFABETO', date:'13/05/2024' },
+            { name:'MARIANA CARVALHO SOUZA',    level:'LÊ PALAVRAS',             date:'10/05/2024' },
+            { name:'NATALIA FERREIRA LIMA',     level:'LÊ TEXTOS COM FLUÊNCIA',  date:'15/05/2024' },
+            { name:'PEDRO LUCAS ALMEIDA',       level:'NÃO LEITOR',              date:'02/05/2024' },
+            { name:'RAFAELA SANTOS COSTA',      level:'RECONHECE TODAS AS LETRAS DO ALFABETO', date:'12/05/2024' },
+            { name:'RENAN OLIVEIRA PEREIRA',    level:'LÊ FRASES',               date:'09/05/2024' },
+            { name:'SARAH LIMA NEVES',          level:'LÊ PALAVRAS',             date:'10/05/2024' },
+            { name:'THALES RODRIGUES',          level:'NÃO LEITOR',              date:'01/05/2024' },
+            { name:'YASMIN FERREIRA BRITO',     level:'RECONHECE TODAS AS LETRAS DO ALFABETO', date:'13/05/2024' },
+        ])
+    },
+    '5a': {
+        name: '5º Ano A',
+        meta: { value:'+15%', label:'Evolução Mês', trend:true },
+        students: mkStudents([
+            { name:'ADRIANA BARBOSA SILVA',     level:'NÃO LEITOR',              date:'12/03/2024' },
+            { name:'ALEXSANDRO LIMA FARIA',     level:'LÊ TEXTOS COM FLUÊNCIA',  date:'15/05/2024' },
+            { name:'ANA CAROLINA SANTOS',       level:'LÊ TEXTOS COM FLUÊNCIA',  date:'15/05/2024' },
+            { name:'BRENO MENDES ROCHA',        level:'LÊ TEXTOS SEM FLUÊNCIA',  date:'18/05/2024' },
+            { name:'BRUNO FERREIRA COSTA',      level:'NÃO LEITOR',              date:'05/02/2024' },
+            { name:'CARLA SANTOS MENDES',       level:'NÃO LEITOR',              date:'20/03/2024' },
+            { name:'CARLOS AUGUSTO PEREIRA',    level:'LÊ TEXTOS COM FLUÊNCIA',  date:'15/05/2024' },
+            { name:'DANIEL LIMA JÚNIOR',        level:'NÃO LEITOR',              date:'15/03/2024' },
+            { name:'DIANA FERREIRA ALVES',      level:'LÊ TEXTOS SEM FLUÊNCIA',  date:'20/05/2024' },
+            { name:'EDUARDO COSTA SILVA',       level:'LÊ TEXTOS COM FLUÊNCIA',  date:'15/05/2024' },
+            { name:'ELAINE NASCIMENTO',         level:'LÊ FRASES',               date:'01/03/2024' },
+            { name:'FÁBIO VIANA LIMA',          level:'LÊ FRASES',               date:'10/05/2024' },
+            { name:'FERNANDA ROCHA SANTOS',     level:'LÊ TEXTOS COM FLUÊNCIA',  date:'15/05/2024' },
+            { name:'GABRIELA CUNHA PEREIRA',    level:'LÊ TEXTOS SEM FLUÊNCIA',  date:'18/05/2024' },
+            { name:'GUSTAVO MENDES FARIA',      level:'LÊ PALAVRAS',             date:'10/05/2024' },
+            { name:'HELOÍSA ALVES COSTA',       level:'LÊ TEXTOS COM FLUÊNCIA',  date:'15/05/2024' },
+            { name:'IGOR BARBOSA LIMA',         level:'LÊ FRASES',               date:'09/05/2024' },
+            { name:'ISABELA MARTINS SOUZA',     level:'LÊ TEXTOS SEM FLUÊNCIA',  date:'20/05/2024' },
+            { name:'JOÃO GUILHERME SANTOS',     level:'LÊ TEXTOS COM FLUÊNCIA',  date:'15/05/2024' },
+            { name:'JULIA FERREIRA NUNES',      level:'LÊ PALAVRAS',             date:'10/05/2024' },
+            { name:'KAUÊ RODRIGUES SILVA',      level:'LÊ FRASES',               date:'08/05/2024' },
+            { name:'LARISSA BRITO PEREIRA',     level:'LÊ TEXTOS COM FLUÊNCIA',  date:'15/05/2024' },
+            { name:'LUCAS ALMEIDA GOMES',       level:'RECONHECE TODAS AS LETRAS DO ALFABETO', date:'12/05/2024' },
+            { name:'LUÍSA CARVALHO SANTOS',     level:'LÊ TEXTOS SEM FLUÊNCIA',  date:'20/05/2024' },
+            { name:'MARCOS HENRIQUE LIMA',      level:'LÊ PALAVRAS',             date:'10/05/2024' },
+            { name:'MARINA SOUZA FARIA',        level:'LÊ TEXTOS COM FLUÊNCIA',  date:'15/05/2024' },
+            { name:'MATEUS PEREIRA ROCHA',      level:'RECONHECE TODAS AS LETRAS DO ALFABETO', date:'12/05/2024' },
+            { name:'NICOLAS FERREIRA COSTA',    level:'LÊ PALAVRAS',             date:'10/05/2024' },
+            { name:'PEDRO AUGUSTO MENDES',      level:'LÊ FRASES',               date:'08/05/2024' },
+            { name:'RAFAELA LIMA BARBOSA',      level:'RECONHECE TODAS AS LETRAS DO ALFABETO', date:'12/05/2024' },
+            { name:'RODRIGO SANTOS ALVES',      level:'LÊ PALAVRAS',             date:'10/05/2024' },
+            { name:'SARAH COSTA FERREIRA',      level:'RECONHECE TODAS AS LETRAS DO ALFABETO', date:'12/05/2024' },
+        ])
+    },
+    '5b': {
+        name: '5º Ano B',
+        meta: { value:'+10%', label:'Evolução Mês', trend:true },
+        students: mkStudents([
+            { name:'ADRIANO BARBOSA',           level:'LÊ TEXTOS COM FLUÊNCIA',  date:'24/10/2024' },
+            { name:'ANA PAULA LIMA',            level:'LÊ TEXTOS SEM FLUÊNCIA',  date:'22/10/2024' },
+            { name:'ANDERSON SILVA COSTA',      level:'LÊ FRASES',               date:'20/10/2024' },
+            { name:'BEATRIZ SOUZA',             level:'LÊ PALAVRAS',             date:'22/10/2024' },
+            { name:'BRUNA FERREIRA SANTOS',     level:'RECONHECE TODAS AS LETRAS DO ALFABETO', date:'18/10/2024' },
+            { name:'CARLOS MACHADO',            level:'NÃO LEITOR',              date:'20/10/2024' },
+            { name:'CAROLINA ALVES MENDES',     level:'LÊ TEXTOS COM FLUÊNCIA',  date:'24/10/2024' },
+            { name:'CRISTIANO PEREIRA LIMA',    level:'LÊ FRASES',               date:'19/10/2024' },
+            { name:'DANIELA LIMA',              level:'LÊ FRASES',               date:'25/10/2024' },
+            { name:'DIEGO COSTA ROCHA',         level:'LÊ TEXTOS SEM FLUÊNCIA',  date:'23/10/2024' },
+            { name:'EDUARDO ROCHA',             level:'RECONHECE TODAS AS LETRAS DO ALFABETO', date:'18/10/2024' },
+            { name:'ELIAS BARBOSA SANTOS',      level:'LÊ TEXTOS COM FLUÊNCIA',  date:'24/10/2024' },
+            { name:'FERNANDA NUNES FARIA',      level:'LÊ PALAVRAS',             date:'20/10/2024' },
+            { name:'FLÁVIA MARTINS',            level:'LÊ TEXTOS SEM FLUÊNCIA',  date:'24/10/2024' },
+            { name:'GABRIEL SOUZA PEREIRA',     level:'LÊ TEXTOS SEM FLUÊNCIA',  date:'22/10/2024' },
+            { name:'GIOVANA ALMEIDA COSTA',     level:'RECONHECE TODAS AS LETRAS DO ALFABETO', date:'18/10/2024' },
+            { name:'GUSTAVO PIRES',             level:'LÊ TEXTOS COM FLUÊNCIA',  date:'24/10/2024' },
+            { name:'HEITOR FERREIRA LIMA',      level:'LÊ FRASES',               date:'19/10/2024' },
+            { name:'ISABELA RODRIGUES SILVA',   level:'LÊ TEXTOS COM FLUÊNCIA',  date:'24/10/2024' },
+            { name:'JOÃO PEDRO SANTOS',         level:'LÊ PALAVRAS',             date:'21/10/2024' },
+            { name:'JÚLIA LIMA BARBOSA',        level:'LÊ TEXTOS SEM FLUÊNCIA',  date:'23/10/2024' },
+            { name:'KAUÊ MENDES COSTA',         level:'LÊ FRASES',               date:'19/10/2024' },
+            { name:'LARISSA PEREIRA NUNES',     level:'LÊ TEXTOS COM FLUÊNCIA',  date:'24/10/2024' },
+            { name:'LEANDRO ALVES SANTOS',      level:'LÊ TEXTOS COM FLUÊNCIA',  date:'24/10/2024' },
+            { name:'LUCAS FARIA ROCHA',         level:'LÊ PALAVRAS',             date:'20/10/2024' },
+            { name:'MARIANA COSTA SOUZA',       level:'LÊ TEXTOS SEM FLUÊNCIA',  date:'22/10/2024' },
+            { name:'MATEUS OLIVEIRA LIMA',      level:'LÊ FRASES',               date:'19/10/2024' },
+            { name:'NATALIA SANTOS FERREIRA',   level:'NÃO LEITOR',              date:'15/10/2024' },
+            { name:'NICOLAS BARBOSA ALVES',     level:'LÊ PALAVRAS',             date:'20/10/2024' },
+            { name:'PEDRO HENRIQUE COSTA',      level:'LÊ TEXTOS COM FLUÊNCIA',  date:'24/10/2024' },
+            { name:'RAFAELA LIMA MENDES',       level:'NÃO LEITOR',              date:'14/10/2024' },
+            { name:'VITOR SANTOS RODRIGUES',    level:'RECONHECE TODAS AS LETRAS DO ALFABETO', date:'18/10/2024' },
+        ])
+    }
+};
+
+const DEF_HIST = [];
+
+// ══════════════════════════════
+//  STATE
+// ══════════════════════════════
+let app       = {};
+let hist      = [];
+let cls       = '4a';
+let page      = 1;
+let sortAsc   = true;
+let filt      = '';
+let search    = '';
+let delTarget = null;
+let saveTimer = null;
+
+// ══════════════════════════════════════════════════════
+//  🔧 CONFIGURAÇÃO FIREBASE — preencha com seus dados
+//  Acesse: console.firebase.google.com → seu projeto →
+//  Configurações do projeto → Seus apps → Config SDK
+// ══════════════════════════════════════════════════════
+const FIREBASE_CONFIG = {
+    apiKey:            "COLE_AQUI_apiKey",
+    authDomain:        "COLE_AQUI_authDomain",
+    databaseURL:       "COLE_AQUI_databaseURL",
+    projectId:         "COLE_AQUI_projectId",
+    storageBucket:     "COLE_AQUI_storageBucket",
+    messagingSenderId: "COLE_AQUI_messagingSenderId",
+    appId:             "COLE_AQUI_appId"
+};
+// ══════════════════════════════════════════════════════
+
+// ══════════════════════════════
+//  PERSISTENCE — FIREBASE RTDB
+// ══════════════════════════════
+let fbDb   = null;
+let fbReady = false;
+
+function setFbStatus(state) {
+    const el    = document.getElementById('fb-status');
+    const dot   = document.getElementById('fb-dot');
+    const label = document.getElementById('fb-label');
+    if (!el) return;
+    el.classList.remove('hidden');
+    if (state === 'online') {
+        dot.className   = 'w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0 animate-pulse';
+        label.textContent = 'Tempo real';
+        el.className    = 'hidden sm:inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border border-emerald-200 text-emerald-700 transition-all duration-300';
+        el.title        = 'Conectado ao Firebase — alterações são sincronizadas em tempo real';
+    } else if (state === 'offline') {
+        dot.className   = 'w-2 h-2 rounded-full bg-amber-400 flex-shrink-0';
+        label.textContent = 'Local';
+        el.className    = 'hidden sm:inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border border-amber-200 text-amber-700 transition-all duration-300';
+        el.title        = 'Firebase não configurado — dados salvos apenas neste navegador';
+    } else {
+        dot.className   = 'w-2 h-2 rounded-full bg-red-400 flex-shrink-0';
+        label.textContent = 'Erro';
+        el.className    = 'hidden sm:inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border border-red-200 text-red-600 transition-all duration-300';
+        el.title        = 'Erro ao conectar ao Firebase';
+    }
+}
+
+let isFirstLoad = true;
+
+function initFirebase() {
+    try {
+        if (FIREBASE_CONFIG.apiKey.includes('COLE_AQUI')) {
+            console.warn('Firebase não configurado — usando localStorage como fallback.');
+            loadFallback();
+            setFbStatus('offline');
+            document.getElementById('school-name').textContent = app.schoolName || 'EMEF ANTÔNIO BARROSO BRAGA';
+            render('4a');
+            return;
+        }
+        firebase.initializeApp(FIREBASE_CONFIG);
+        fbDb = firebase.database();
+        fbReady = true;
+
+        firebase.database().ref('.info/connected').on('value', snap => {
+            if (snap.val() === true) setFbStatus('online');
+            else setFbStatus('error');
+        });
+
+        fbDb.ref('gestaoEscolar').on('value', snapshot => {
+            const data = snapshot.val();
+            if (data) {
+                const incoming = JSON.stringify({ appData: data.appData, histData: data.histData });
+                const current  = JSON.stringify({ appData: app, histData: hist });
+                app  = data.appData  || JSON.parse(JSON.stringify(DEF_APP));
+                hist = data.histData || [];
+                document.getElementById('school-name').textContent = app.schoolName || 'EMEF ANTÔNIO BARROSO BRAGA';
+                render(cls || '4a');
+                if (!isFirstLoad && incoming !== current) {
+                    toast('Página atualizada por outro usuário.', 'info');
+                }
+            } else {
+                app  = JSON.parse(JSON.stringify(DEF_APP));
+                hist = [];
+                document.getElementById('school-name').textContent = app.schoolName || 'EMEF ANTÔNIO BARROSO BRAGA';
+                render('4a');
+            }
+            isFirstLoad = false;
+        }, err => {
+            console.error('Firebase erro:', err);
+            setFbStatus('error');
+            loadFallback();
+            document.getElementById('school-name').textContent = app.schoolName || 'EMEF ANTÔNIO BARROSO BRAGA';
+            render('4a');
+        });
+    } catch(e) {
+        console.error('Firebase init falhou:', e);
+        setFbStatus('error');
+        loadFallback();
+        document.getElementById('school-name').textContent = app.schoolName || 'EMEF ANTÔNIO BARROSO BRAGA';
+        render('4a');
+    }
+}
+
+function loadFallback() {
+    try {
+        const raw = localStorage.getItem('gestao_escolar_v1');
+        if (raw) {
+            const saved = JSON.parse(raw);
+            app  = saved.appData  || JSON.parse(JSON.stringify(DEF_APP));
+            hist = saved.histData || [];
+            return;
+        }
+    } catch(e) {}
+    app  = JSON.parse(JSON.stringify(DEF_APP));
+    hist = [];
+}
+
+function scheduleSave() {
+    clearTimeout(saveTimer);
+    showSavingBadge(true);
+    saveTimer = setTimeout(saveData, 800);
+}
+
+function saveData() {
+    if (fbReady && fbDb) {
+        fbDb.ref('gestaoEscolar').set({ appData: app, histData: hist })
+            .catch(e => console.warn('Erro ao salvar no Firebase:', e))
+            .finally(() => showSavingBadge(false));
+    } else {
+        try {
+            localStorage.setItem('gestao_escolar_v1', JSON.stringify({ appData: app, histData: hist }));
+        } catch(e) {}
+        showSavingBadge(false);
+    }
+}
+
+function showSavingBadge(show) {
+    const el = document.getElementById('saving-badge');
+    el.classList.toggle('hidden', !show);
+    el.classList.toggle('flex', show);
+}
+
+// ══════════════════════════════
+//  HELPERS
+// ══════════════════════════════
+function ini(name) {
+    const p = name.trim().split(/\s+/);
+    return p.length >= 2 ? (p[0][0]+p[p.length-1][0]).toUpperCase() : name.slice(0,2).toUpperCase();
+}
+function randColor()  { return COLORS[Math.floor(Math.random()*COLORS.length)]; }
+function todayStr()   { return new Date().toLocaleDateString('pt-BR'); }
+function nowStr()     { return new Date().toLocaleString('pt-BR'); }
+function pad2(n)      { return String(n).padStart(2,'0'); }
+
+function addHist(name, className, oldLvl, newLvl) {
+    hist.unshift({ ts:nowStr(), name, className, oldLvl, newLvl });
+    if (hist.length > 500) hist.length = 500;
+}
+
+function toast(msg, type='success') {
+    const t = document.createElement('div');
+    const bg = type==='error' ? 'bg-danger' : type==='info' ? 'bg-primary' : 'bg-green-600';
+    const ic = type==='error' ? 'ph-x-circle' : type==='info' ? 'ph-info' : 'ph-check-circle';
+    t.className = `toast ${bg} text-white px-4 py-2.5 rounded-lg shadow-lg text-xs font-medium flex items-center gap-2`;
+    t.innerHTML = `<i class="ph-fill ${ic} text-base"></i>${msg}`;
+    document.getElementById('toasts').appendChild(t);
+    setTimeout(() => t.remove(), 2900);
+}
+
+// ══════════════════════════════
+//  KPIs
+// ══════════════════════════════
+function calcKpis(students) {
+    const total = students.length;
+    const flu   = students.filter(s => s.level==='LÊ TEXTOS COM FLUÊNCIA'||s.level==='LÊ TEXTOS SEM FLUÊNCIA').length;
+    const nao   = students.filter(s => s.level==='NÃO LEITOR').length;
+    return { total, flu, fluPct: total?Math.round(flu/total*100)+'%':'0%', nao, naoPct: total?Math.round(nao/total*100)+'%':'0%' };
+}
+
+// ══════════════════════════════
+//  LEVEL BARS
+// ══════════════════════════════
+function renderLevelBars(students) {
+    const total = students.length;
+    const container = document.getElementById('level-bars');
+    container.innerHTML = '';
+
+    LEVELS.forEach(lv => {
+        const count = students.filter(s => s.level === lv.key).length;
+        const pct   = total > 0 ? Math.round(count / total * 100) : 0;
+
+        const row = document.createElement('div');
+        row.className = 'flex items-center gap-3';
+        row.innerHTML = `
+            <div class="w-44 text-xs text-gray-600 font-medium flex-shrink-0 flex items-center gap-2">
+                <span class="inline-block w-2.5 h-2.5 rounded-full ${lv.bar} flex-shrink-0"></span>
+                ${lv.label}
+            </div>
+            <div class="flex-1 bg-gray-100 rounded-full h-4 overflow-hidden">
+                <div class="bar-fill h-full rounded-full ${lv.bar}" style="width:0%"
+                     data-pct="${pct}"></div>
+            </div>
+            <div class="w-24 flex items-center gap-2 flex-shrink-0">
+                <span class="text-sm font-bold text-gray-800">${pct}%</span>
+                <span class="text-xs text-gray-400">(${count} aluno${count!==1?'s':''})</span>
+            </div>
+        `;
+        container.appendChild(row);
+    });
+
+    // animate bars after paint
+    requestAnimationFrame(() => {
+        container.querySelectorAll('.bar-fill').forEach(el => {
+            el.style.width = el.dataset.pct + '%';
+        });
+    });
+}
+
+// ══════════════════════════════
+//  RENDER
+// ══════════════════════════════
+function render(c) {
+    if (c) { cls = c; page = 1; }
+    const d = app[cls]; if (!d) return;
+
+    document.querySelectorAll('.sidebar-item').forEach(el => {
+        el.classList.remove('bg-primary-light','text-primary','font-semibold');
+        el.classList.add('text-gray-600');
+    });
+    const nav = document.getElementById('nav-'+cls);
+    if (nav) { nav.classList.add('bg-primary-light','text-primary','font-semibold'); nav.classList.remove('text-gray-600'); }
+
+    document.getElementById('crumb').textContent = d.name;
+
+    const k = calcKpis(d.students);
+    document.getElementById('kpi-total').textContent    = k.total;
+    document.getElementById('kpi-flu').textContent      = pad2(k.flu);
+    document.getElementById('kpi-flu-pct').textContent  = `(${k.fluPct})`;
+    document.getElementById('kpi-nao').textContent      = pad2(k.nao);
+    document.getElementById('kpi-nao-pct').textContent  = `(${k.naoPct})`;
+
+    const metaEl = document.getElementById('kpi-meta');
+    document.getElementById('kpi-meta-lbl').textContent = d.meta.label;
+    if (d.meta.trend) {
+        metaEl.className = 'text-3xl font-bold text-success mt-2';
+        metaEl.innerHTML = `<span class="text-2xl mr-0.5">↗</span>${d.meta.value}`;
+    } else {
+        metaEl.className = 'text-3xl font-bold text-primary mt-2';
+        metaEl.textContent = d.meta.value;
+    }
+
+    renderLevelBars(d.students);
+    renderTable();
+}
+
+function getFiltered() {
+    let list = [...app[cls].students];
+    if (filt)   list = list.filter(s => s.level === filt);
+    if (search) { const q=search.toLowerCase(); list=list.filter(s=>s.name.toLowerCase().includes(q)); }
+    list.sort((a,b) => sortAsc ? a.name.localeCompare(b.name,'pt') : b.name.localeCompare(a.name,'pt'));
+    return list;
+}
+
+function renderTable() {
+    const list   = getFiltered();
+    const total  = list.length;
+    const pages  = Math.max(1, Math.ceil(total/PER_PAG));
+    if (page > pages) page = pages;
+    const start  = (page-1)*PER_PAG;
+    const slice  = list.slice(start, start+PER_PAG);
+
+    const tbody  = document.getElementById('tbody');
+    tbody.innerHTML = '';
+
+    if (!slice.length) {
+        tbody.innerHTML = `<tr><td colspan="5" class="px-5 py-10 text-center text-gray-400 text-sm">Nenhum aluno encontrado.</td></tr>`;
+    } else {
+        slice.forEach(student => {
+            const ri = app[cls].students.findIndex(s => s === student || s.name === student.name);
+            const tr = document.createElement('tr');
+            tr.className = 'hover:bg-gray-50 transition-colors';
+            tr.innerHTML = `
+                <td class="px-5 py-3.5 text-sm text-gray-500 font-medium">${student.id}</td>
+                <td class="px-5 py-3.5">
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-full ${student.color} flex items-center justify-center text-xs font-bold flex-shrink-0">${student.initials}</div>
+                        <span class="text-sm font-semibold text-gray-900">${student.name}</span>
+                    </div>
+                </td>
+                <td class="px-5 py-3.5">
+                    <select onchange="updateLevel(${ri}, this.value)"
+                        class="w-full max-w-[260px] text-xs border border-gray-200 rounded-md py-1.5 px-2 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary cursor-pointer text-gray-700">
+                        ${LEVELS.map(lv=>`<option ${student.level===lv.key?'selected':''} value="${lv.key}">${lv.key}</option>`).join('')}
+                    </select>
+                </td>
+                <td class="px-5 py-3.5 text-sm text-gray-500 hidden md:table-cell">${student.date}</td>
+                <td class="px-5 py-3.5">
+                    <div class="flex items-center gap-1">
+                        <button onclick="openEditModal(${ri})" class="p-1.5 text-gray-400 hover:text-primary hover:bg-blue-50 rounded-full transition-colors" title="Editar aluno">
+                            <i class="ph ph-pencil-simple text-lg"></i>
+                        </button>
+                        <button onclick="openStudentHistory(${ri})" class="p-1.5 text-gray-400 hover:text-primary hover:bg-gray-100 rounded-full transition-colors" title="Histórico">
+                            <i class="ph ph-clock-counter-clockwise text-lg"></i>
+                        </button>
+                        <button onclick="openDelModal(${ri})" class="p-1.5 text-gray-400 hover:text-danger hover:bg-red-50 rounded-full transition-colors" title="Excluir aluno">
+                            <i class="ph ph-trash text-lg"></i>
+                        </button>
+                    </div>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    // Pagination
+    document.getElementById('pag-info').textContent =
+        `Exibindo ${total===0?0:start+1}–${Math.min(start+PER_PAG,total)} de ${total} aluno${total!==1?'s':''}`;
+
+    const btns = document.getElementById('pag-btns');
+    btns.innerHTML = '';
+
+    const mkBtn = (html, disabled, fn) => {
+        const b = document.createElement('button');
+        b.innerHTML = html; b.disabled = disabled;
+        b.className = `w-7 h-7 flex items-center justify-center rounded border border-gray-300 bg-white text-gray-500 hover:bg-gray-100 transition-colors text-xs ${disabled?'opacity-40 cursor-not-allowed':''}`;
+        if (!disabled) b.onclick = fn;
+        return b;
+    };
+
+    btns.appendChild(mkBtn('<i class="ph ph-caret-left text-xs"></i>', page===1, ()=>{page--;renderTable();}));
+    for (let p=1; p<=pages; p++) {
+        const b = document.createElement('button');
+        b.className = p===page
+            ? 'w-7 h-7 flex items-center justify-center rounded bg-primary text-white text-xs font-semibold'
+            : 'w-7 h-7 flex items-center justify-center rounded border border-gray-300 bg-white text-gray-600 hover:bg-gray-100 text-xs font-medium';
+        b.textContent = p;
+        b.onclick = () => { page=p; renderTable(); };
+        btns.appendChild(b);
+    }
+    btns.appendChild(mkBtn('<i class="ph ph-caret-right text-xs"></i>', page===pages, ()=>{page++;renderTable();}));
+}
+
+// ══════════════════════════════
+//  SEARCH / FILTER / SORT
+// ══════════════════════════════
+function doSearch(v)  { search=v; page=1; renderTable(); }
+function doFilter()   { filt=document.getElementById('filter-sel').value; page=1; renderTable(); }
+function toggleSort() {
+    sortAsc=!sortAsc;
+    document.getElementById('sort-lbl').textContent = sortAsc ? 'Nome (A-Z)' : 'Nome (Z-A)';
+    renderTable();
+}
+
+// ══════════════════════════════
+//  ADD / EDIT STUDENT
+// ══════════════════════════════
+function openAddModal() {
+    document.getElementById('modal-title').textContent = 'Adicionar Aluno';
+    document.getElementById('s-idx').value   = '-1';
+    document.getElementById('s-name').value  = '';
+    document.getElementById('s-level').value = 'NÃO LEITOR';
+    showModal('modal-student');
+    setTimeout(()=>document.getElementById('s-name').focus(), 120);
+}
+
+function openEditModal(ri) {
+    const s = app[cls].students[ri]; if (!s) return;
+    document.getElementById('modal-title').textContent = 'Editar Aluno';
+    document.getElementById('s-idx').value   = ri;
+    document.getElementById('s-name').value  = s.name;
+    document.getElementById('s-level').value = s.level;
+    showModal('modal-student');
+}
+
+function closeStudentModal() { hideModal('modal-student'); }
+
+document.getElementById('student-form').addEventListener('submit', e => {
+    e.preventDefault();
+    const ri    = parseInt(document.getElementById('s-idx').value);
+    const name  = document.getElementById('s-name').value.toUpperCase().trim();
+    const level = document.getElementById('s-level').value;
+    if (!name) return;
+
+    if (ri === -1) {
+        const newId = String(app[cls].students.length+1).padStart(2,'0');
+        app[cls].students.push({ id:newId, initials:ini(name), name, level, date:todayStr(), color:randColor() });
+        addHist(name, app[cls].name, '—', level);
+        toast('Aluno adicionado!');
+    } else {
+        const s=app[cls].students[ri], old=s.level;
+        s.name=name; s.initials=ini(name); s.level=level; s.date=todayStr();
+        if (old!==level) addHist(name, app[cls].name, old, level);
+        toast('Aluno atualizado!');
+    }
+    scheduleSave(); render(cls); closeStudentModal();
+});
+
+// ══════════════════════════════
+//  UPDATE LEVEL INLINE
+// ══════════════════════════════
+function updateLevel(ri, newLvl) {
+    const s=app[cls].students[ri], old=s.level;
+    s.level=newLvl; s.date=todayStr();
+    addHist(s.name, app[cls].name, old, newLvl);
+    scheduleSave(); render(cls);
+    toast('Nível atualizado!','info');
+}
+
+// ══════════════════════════════
+//  STUDENT HISTORY
+// ══════════════════════════════
+function openStudentHistory(ri) {
+    const s = app[cls].students[ri];
+    document.getElementById('shist-name').textContent = s.name;
+    const entries = hist.filter(h => h.name===s.name);
+    const body = document.getElementById('shist-body');
+    body.innerHTML = entries.length ? entries.map(h=>`
+        <div class="flex gap-3 text-xs">
+            <div class="w-7 h-7 bg-blue-50 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                <i class="ph ph-arrow-right text-primary text-xs"></i>
+            </div>
+            <div class="flex-1">
+                <div class="flex justify-between gap-2 text-gray-400">${h.ts}<span>${h.className}</span></div>
+                <div class="mt-0.5"><span class="line-through text-gray-400">${h.oldLvl}</span> <span class="text-gray-400">→</span> <span class="font-semibold text-primary">${h.newLvl}</span></div>
+            </div>
+        </div>
+    `).join('') : `<p class="text-xs text-gray-400 text-center py-4">Nenhuma alteração registrada ainda.</p>`;
+    document.getElementById('shist-edit-btn').onclick = () => { closeStudentHistory(); openEditModal(ri); };
+    document.getElementById('shist-del-btn').onclick  = () => { closeStudentHistory(); openDelModal(ri); };
+    showModal('modal-shist');
+}
+function closeStudentHistory() { hideModal('modal-shist'); }
+
+// ══════════════════════════════
+//  DELETE
+// ══════════════════════════════
+function openDelModal(ri) {
+    delTarget=ri;
+    document.getElementById('del-name').textContent = app[cls].students[ri]?.name||'';
+    showModal('modal-del');
+}
+function closeDelModal() { delTarget=null; hideModal('modal-del'); }
+function confirmDel() {
+    if (delTarget===null) return;
+    const name = app[cls].students[delTarget].name;
+    app[cls].students.splice(delTarget,1);
+    app[cls].students.forEach((s,i)=>s.id=pad2(i+1));
+    scheduleSave(); render(cls); closeDelModal();
+    toast(`${name} excluído(a).`,'error');
+}
+
+// ══════════════════════════════
+//  NEXT ASSESSMENT
+// ══════════════════════════════
+function openNextAssessment() {
+    document.getElementById('assess-class').value = app[cls]?.name||'';
+    document.getElementById('assess-date').value  = '';
+    document.getElementById('assess-obs').value   = '';
+    showModal('modal-assess');
+}
+function submitAssessment(e) {
+    e.preventDefault();
+    const d = new Date(document.getElementById('assess-date').value+'T00:00').toLocaleDateString('pt-BR');
+    hideModal('modal-assess');
+    toast(`Avaliação agendada para ${d}!`,'info');
+}
+
+// ══════════════════════════════
+//  GLOBAL HISTORY
+// ══════════════════════════════
+function openGlobalHistory() {
+    document.getElementById('main-view').classList.add('hidden');
+    document.getElementById('hist-view').classList.remove('hidden');
+    const el = document.getElementById('hist-list');
+    el.innerHTML = hist.length ? hist.map(h=>`
+        <div class="flex gap-3 p-4 hover:bg-gray-50">
+            <div class="w-8 h-8 bg-primary-light rounded-full flex items-center justify-center flex-shrink-0">
+                <i class="ph ph-pencil-simple text-primary text-sm"></i>
+            </div>
+            <div class="flex-1 min-w-0">
+                <div class="flex justify-between gap-2 flex-wrap">
+                    <span class="font-semibold text-gray-800 text-sm">${h.name}</span>
+                    <span class="text-[10px] text-gray-400">${h.ts}</span>
+                </div>
+                <div class="text-[10px] text-gray-400">${h.className}</div>
+                <div class="text-xs mt-0.5"><span class="line-through text-gray-400">${h.oldLvl}</span> <span class="text-gray-400">→</span> <span class="font-semibold text-primary">${h.newLvl}</span></div>
+            </div>
+        </div>
+    `).join('') : `<div class="p-8 text-center text-gray-400 text-xs">Nenhuma alteração registrada.</div>`;
+}
+function closeGlobalHistory() {
+    document.getElementById('hist-view').classList.add('hidden');
+    document.getElementById('main-view').classList.remove('hidden');
+}
+
+// ══════════════════════════════
+//  CONFIG
+// ══════════════════════════════
+function openConfigModal() {
+    document.getElementById('cfg-school').value = app.schoolName||'';
+    ['4a','4b','5a','5b'].forEach(k=>{ document.getElementById('cfg-'+k).value=app[k]?.meta?.value||''; });
+    showModal('modal-config');
+}
+function saveConfig() {
+    const sc=document.getElementById('cfg-school').value.trim();
+    if (sc) { app.schoolName=sc; document.getElementById('school-name').textContent=sc; }
+    ['4a','4b','5a','5b'].forEach(k=>{
+        const v=document.getElementById('cfg-'+k).value.trim();
+        if (v&&app[k]) { app[k].meta.value=v; app[k].meta.trend=v.includes('+')||v.includes('-'); app[k].meta.label=app[k].meta.trend?'Evolução Mês':'Meta Bimestre'; }
+    });
+    scheduleSave(); render(cls); hideModal('modal-config'); toast('Configurações salvas!');
+}
+function resetData() {
+    if (!confirm('Restaurar todos os dados padrão?')) return;
+    app=JSON.parse(JSON.stringify(DEF_APP)); hist=[];
+    scheduleSave(); hideModal('modal-config'); render(cls); toast('Dados restaurados.','info');
+}
+
+// ══════════════════════════════
+//  EXPORT
+// ══════════════════════════════
+function exportReport() {
+    const d=app[cls], k=calcKpis(d.students);
+    const lines=[
+        `RELATÓRIO DE LEITURA — ${d.name}`,
+        `Escola: ${app.schoolName}`,
+        `Gerado em: ${nowStr()}`, '',
+        `Total: ${k.total} | Com Fluência: ${k.flu} (${k.fluPct}) | Não Leitores: ${k.nao} (${k.naoPct})`, '',
+        'Nº  ALUNO                                    NÍVEL                                  ÚLTIMA ALT.',
+        '─'.repeat(95),
+        ...d.students.map(s=>`${s.id}  ${s.name.padEnd(40)} ${s.level.padEnd(40)} ${s.date}`),
+    ];
+    const a=document.createElement('a');
+    a.href='data:text/plain;charset=utf-8,'+encodeURIComponent(lines.join('\n'));
+    a.download=`relatorio-${cls}-${todayStr().replace(/\//g,'-')}.txt`;
+    a.click(); toast('Relatório exportado!');
+}
+
+// ══════════════════════════════
+//  MODAL UTILS
+// ══════════════════════════════
+function showModal(id) { document.getElementById(id).classList.replace('hidden','flex'); }
+function hideModal(id) { document.getElementById(id).classList.replace('flex','hidden'); }
+
+['modal-student','modal-shist','modal-del','modal-assess','modal-config'].forEach(id=>{
+    document.getElementById(id).addEventListener('click', e=>{
+        if (e.target===document.getElementById(id)) { hideModal(id); delTarget=null; }
+    });
+});
+document.addEventListener('keydown', e=>{
+    if (e.key!=='Escape') return;
+    ['modal-student','modal-shist','modal-del','modal-assess','modal-config'].forEach(hideModal);
+    delTarget=null;
+});
+
+// ══════════════════════════════
+//  MOBILE SIDEBAR
+// ══════════════════════════════
+function toggleSidebar() {
+    const s=document.getElementById('sidebar'), o=document.getElementById('mob-overlay');
+    const open=!s.classList.contains('-translate-x-full');
+    s.classList.toggle('-translate-x-full',open);
+    o.classList.toggle('hidden',open);
+}
+
+// ══════════════════════════════
+//  INIT
+// ══════════════════════════════
+initFirebase();
+</script>
+</body>
+</html>
