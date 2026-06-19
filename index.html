@@ -808,7 +808,7 @@ function toast(msg, type='success') {
 // ══════════════════════════════
 //  KPIs
 // ══════════════════════════════
-function calcKpis(students) {
+function calcKpis(students = []){
     const total = students.length;
     const flu   = students.filter(s => s.level==='LÊ TEXTOS COM FLUÊNCIA'||s.level==='LÊ TEXTOS SEM FLUÊNCIA').length;
     const nao   = students.filter(s => s.level==='NÃO LEITOR').length;
@@ -873,7 +873,7 @@ function renderFromFirebase(c) {
 
     document.getElementById('crumb').textContent = d.name;
 
-    const k = calcKpis(d.students);
+    const k = calcKpis(d.students || []);
     document.getElementById('kpi-total').textContent    = k.total;
     document.getElementById('kpi-flu').textContent      = pad2(k.flu);
     document.getElementById('kpi-flu-pct').textContent  = `(${k.fluPct})`;
